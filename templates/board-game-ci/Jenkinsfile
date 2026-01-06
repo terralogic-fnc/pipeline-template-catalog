@@ -8,13 +8,31 @@ pipeline {
     }
   }
 
-  /* ================= PARAMETERS (CATALOG REQUIRED) ================= */
+  /* ================= PARAMETERS (REQUIRED FOR CATALOG) ================= */
   parameters {
-    string(name: 'repoUrl', description: 'Git repository URL')
-    string(name: 'branchName', defaultValue: 'main', description: 'Git branch')
-    credentials(name: 'gitCredentials', description: 'Git credentials')
-    string(name: 'imageName', defaultValue: 'gkamalakar1006/boardgames', description: 'Docker image name')
-    string(name: 'sonarProjectKey', defaultValue: 'board_game', description: 'SonarQube project key')
+    string(
+      name: 'repoUrl',
+      description: 'Git repository URL'
+    )
+    string(
+      name: 'branchName',
+      defaultValue: 'main',
+      description: 'Git branch to build'
+    )
+    credentials(
+      name: 'gitCredentials',
+      description: 'Git credentials'
+    )
+    string(
+      name: 'imageName',
+      defaultValue: 'gkamalakar1006/boardgames',
+      description: 'Docker image name'
+    )
+    string(
+      name: 'sonarProjectKey',
+      defaultValue: 'board_game',
+      description: 'SonarQube project key'
+    )
   }
 
   /* ================= ENVIRONMENT ================= */
@@ -38,14 +56,13 @@ pipeline {
     /* ================= CHECKOUT ================= */
     stage('Checkout') {
       steps {
-        checkout([
-          $class: 'GitSCM',
-          branches: [[name: "*/${params.branchName}"]],
-          userRemoteConfigs: [[
-            url: params.repoUrl,
-            credentialsId: params.gitCredentials
-          ]]
-        ])
+        echo "Checkout → repo=${params.repoUrl}, branch=${params.branchName}, creds=${params.gitCredentials}"
+
+        git(
+          url: params.repoUrl,
+          branch: params.branchName,
+          credentialsId: params.gitCredentials
+        )
       }
     }
 
@@ -59,7 +76,10 @@ pipeline {
 
     stage('Maven Build') {
       steps {
-        sh "mvn clean install -Dmaven.repo.local=${MAVEN_REPO}"
+        sh """
+          mvn clean install \
+            -Dmaven.repo.local=${MAVEN_REPO}
+        """
       }
     }
 
@@ -99,7 +119,8 @@ pipeline {
       steps {
         sh '''
           if [ ! -f trivy-templates/html.tpl ]; then
-            curl -fsSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl \
+            curl -fsSL \
+              https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl \
               -o trivy-templates/html.tpl
           fi
         '''
@@ -131,6 +152,7 @@ pipeline {
         container('kaniko') {
           sh '''
             mkdir -p "$KANIKO_CACHE_DIR"
+
             /kaniko/executor \
               --context /workspace \
               --dockerfile Dockerfile \
@@ -195,6 +217,10 @@ pipeline {
         allowEmptyArchive: true,
         artifacts: 'trivy-reports/*.html,trivy-reports/*.json'
       )
+
+      echo "Build #: ${BUILD_NUMBER}"
+      echo "Result  : ${currentBuild.currentResult}"
+
       deleteDir()
     }
   }
