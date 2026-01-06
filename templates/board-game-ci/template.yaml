@@ -5,10 +5,9 @@ name: Java CI Pipeline with Security Scans
 displayName: Java CI – Build, Scan & Docker Image
 
 description: >
-  This pipeline automatically builds a Java application,
-  checks code quality, scans for security issues,
-  builds a Docker image, and publishes reports.
-  Users only need to provide the source code repository details.
+  Build Java applications, run SonarQube and Trivy security scans,
+  build Docker images using Kaniko, and generate SBOM reports.
+  Image tags are automatically generated using the Jenkins build number.
 
 parameters:
   - name: repoUrl
@@ -20,7 +19,7 @@ parameters:
   - name: branchName
     type: string
     displayName: Git Branch
-    description: Branch to build from
+    description: Git branch to build from
     defaultValue: main
 
   - name: gitCredentials
@@ -32,12 +31,11 @@ parameters:
   - name: imageName
     type: string
     displayName: Docker Image Name
-    description: Docker image name to build and push
+    description: Docker image name (image tag = build number)
     defaultValue: gkamalakar1006/boardgames
 
   - name: sonarProjectKey
     type: string
     displayName: SonarQube Project Key
-    description: Unique project key in SonarQube
+    description: SonarQube project key
     defaultValue: board_game
-
