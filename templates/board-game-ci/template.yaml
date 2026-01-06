@@ -1,14 +1,16 @@
 type: pipeline-template
 version: 1
 
-name: Java Maven CI (SCM + Cache)
-displayName: Java CI – SCM Checkout & Maven Build
+name: Java Maven CI with Trivy & Sonar
+displayName: Java CI – Maven, Trivy FS & SonarQube
 
 description: >
-  This pipeline checks out source code from Git,
-  restores the Maven dependency cache,
-  runs a Maven clean build,
-  and saves the cache for faster future builds.
+  Standard Java CI pipeline using Maven.
+  It checks out source code, restores Maven cache,
+  runs a clean build, performs Trivy filesystem security scanning,
+  and runs SonarQube analysis.
+  Secrets such as Git and Sonar tokens are managed centrally
+  via Jenkins credentials.
 
 parameters:
   - name: repoUrl
@@ -23,8 +25,16 @@ parameters:
     description: Branch to build
     defaultValue: main
 
+  - name: gitCredentials
+    type: credentials
+    displayName: Git Credentials
+    description: Git PAT / SSH credentials stored in Jenkins
+    required: true
+
   - name: sonarProjectKey
     type: string
     displayName: SonarQube Project Key
-    description: Unique SonarQube project key
+    description: Unique project key in SonarQube
     defaultValue: board_game
+    required: true
+    
