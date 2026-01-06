@@ -30,7 +30,7 @@ pipeline {
     /* ================= SCM CHECKOUT ================= */
     stage('Checkout') {
       steps {
-        echo "Checkout → repo=${repoUrl}, branch=${branchName}, creds=${gitCredentials}"
+        echo "Checkout → repo=${repoUrl}, branch=${branchName}"
 
         checkout([
           $class: 'GitSCM',
@@ -109,30 +109,15 @@ pipeline {
       }
     }
 
-    /* ================= SET SONAR PROJECT KEY (SAFE FALLBACK) ================= */
-    stage('Prepare Sonar Variables') {
-      steps {
-        script {
-          if (binding.hasVariable('sonarProjectKey') && sonarProjectKey?.trim()) {
-            env.SONAR_PROJECT_KEY = sonarProjectKey
-          } else {
-            env.SONAR_PROJECT_KEY = 'board_game'
-          }
-          echo "Using Sonar Project Key: ${env.SONAR_PROJECT_KEY}"
-        }
-      }
-    }
-
-    /* ================= SONAR SCAN ================= */
+    /* ================= SONARQUBE SCAN ================= */
     stage('SonarQube Scan') {
       steps {
         withSonarQubeEnv('sonar-server') {
           sh """
-            echo "=== SONARQUBE SCAN ==="
-            mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+            mvn sonar:sonar \
               -Dmaven.repo.local=${MAVEN_REPO} \
-              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-              -Dsonar.projectName=${SONAR_PROJECT_KEY}
+              -Dsonar.projectKey=${sonarProjectKey} \
+              -Dsonar.projectName=${sonarProjectKey}
           """
         }
       }
