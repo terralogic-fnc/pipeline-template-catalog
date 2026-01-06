@@ -15,14 +15,21 @@ pipeline {
   }
 
   environment {
+    /* ================= IMAGE ================= */
+    IMAGE_NAME = "${imageName}"
+    IMAGE_TAG  = "${BUILD_NUMBER}"
+
     /* ================= MAVEN ================= */
     MAVEN_REPO     = 'maven-repo'
     MVN_CACHE_NAME = 'mvn-cache'
 
     /* ================= TRIVY ================= */
-    TRIVY_CACHE_DIR = '.trivycache'
-    TRIVY_DB_REPOSITORY = 'docker.io/aquasec/trivy-db'
-    TRIVY_JAVA_DB_REPOSITORY = 'docker.io/aquasec/trivy-java-db'
+    TRIVY_CACHE_DIR           = '.trivycache'
+    TRIVY_DB_REPOSITORY       = 'docker.io/aquasec/trivy-db'
+    TRIVY_JAVA_DB_REPOSITORY  = 'docker.io/aquasec/trivy-java-db'
+
+    /* ================= KANIKO ================= */
+    KANIKO_CACHE_DIR = '/workspace/.kaniko-cache'
   }
 
   stages {
@@ -35,9 +42,6 @@ pipeline {
         checkout([
           $class: 'GitSCM',
           branches: [[name: "${branchName}"]],
-          doGenerateSubmoduleConfigurations: false,
-          extensions: [],
-          submoduleCfg: [],
           userRemoteConfigs: [[
             url: "${repoUrl}",
             credentialsId: "${gitCredentials}"
@@ -80,7 +84,7 @@ pipeline {
       steps {
         withSonarQubeEnv('sonar-server') {
           sh """
-            mvn \
+            mvn -o \
               -Dmaven.repo.local=${MAVEN_REPO} \
               org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
               -Dsonar.projectKey=${sonarProjectKey} \
@@ -105,7 +109,10 @@ pipeline {
       }
     }
 
-    /* ================= TRIVY FILESYSTEM SCAN ================= */
+    /* ================= TRIVY FS SCAN =================
+       Scans source code & dependency files
+       Detects vulnerable libraries and license issues
+    */
     stage('Trivy FS Scan (Non-Blocking)') {
       steps {
         catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
@@ -124,13 +131,71 @@ pipeline {
         }
       }
     }
+
+    /* ================= KANIKO BUILD & PUSH ================= */
+    stage('Kaniko Build & Push') {
+      steps {
+        container('kaniko') {
+          sh '''
+            mkdir -p "$KANIKO_CACHE_DIR"
+
+            /kaniko/executor \
+              --context /workspace \
+              --dockerfile Dockerfile \
+              --destination ${IMAGE_NAME}:${IMAGE_TAG} \
+              --destination ${IMAGE_NAME}:latest \
+              --cache=true \
+              --cache-dir="$KANIKO_CACHE_DIR"
+          '''
+        }
+      }
+    }
+
+    /* ================= TRIVY IMAGE SCAN =================
+       Scans final container image
+       Detects OS & runtime vulnerabilities
+    */
+    stage('Trivy Image Scan (Non-Blocking)') {
+      steps {
+        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+          sh '''
+            trivy image \
+              --cache-dir "$TRIVY_CACHE_DIR" \
+              --db-repository "$TRIVY_DB_REPOSITORY" \
+              --java-db-repository "$TRIVY_JAVA_DB_REPOSITORY" \
+              --scanners vuln \
+              --severity LOW,MEDIUM,HIGH,CRITICAL \
+              --ignore-unfixed \
+              --format template \
+              --template @trivy-templates/html.tpl \
+              --output trivy-reports/image-vuln.html \
+              ${IMAGE_NAME}:${IMAGE_TAG}
+          '''
+        }
+      }
+    }
+
+    /* ================= SBOM GENERATION =================
+       Generates Software Bill of Materials (CycloneDX)
+       Used for compliance and audits
+    */
+    stage('Generate SBOM') {
+      steps {
+        sh '''
+          trivy fs \
+            --cache-dir "$TRIVY_CACHE_DIR" \
+            --format cyclonedx \
+            --output trivy-reports/source-sbom.json .
+        '''
+      }
+    }
   }
 
   post {
     always {
       archiveArtifacts(
         allowEmptyArchive: true,
-        artifacts: 'trivy-reports/*.html'
+        artifacts: 'trivy-reports/*.html, trivy-reports/*.json'
       )
 
       echo "Build completed: #${BUILD_NUMBER}"
