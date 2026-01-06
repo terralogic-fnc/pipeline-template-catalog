@@ -130,7 +130,6 @@ pipeline {
         allowEmptyArchive: true,
         artifacts: 'trivy-reports/*.html'
       )
-
       echo "Build completed: #${BUILD_NUMBER}"
       deleteDir()
     }
