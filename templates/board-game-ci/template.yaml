@@ -35,3 +35,10 @@ parameters:
     displayName: SonarQube Project Key
     description: Unique project key in SonarQube
     required: true
+    
+  - name: imageName
+    type: string
+    displayName: Docker Image Name
+    description: Example: gkamalakar1006/boardgames
+    required: true
+
