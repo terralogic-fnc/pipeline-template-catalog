@@ -36,5 +36,5 @@ parameters:
     displayName: SonarQube Project Key
     description: Unique project key in SonarQube
     defaultValue: board_game
-    required: true
+
     
