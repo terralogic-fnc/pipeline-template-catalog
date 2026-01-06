@@ -1,41 +1,30 @@
 type: pipeline-template
 version: 1
 
-name: Java CI Pipeline with Security Scans
-displayName: Java CI – Build, Scan & Docker Image
+name: Java Maven CI (SCM + Cache)
+displayName: Java CI – SCM Checkout & Maven Build
 
 description: >
-  Build Java applications, run SonarQube and Trivy security scans,
-  build Docker images using Kaniko, and generate SBOM reports.
-  Image tags are automatically generated using the Jenkins build number.
+  This pipeline checks out source code from Git,
+  restores the Maven dependency cache,
+  runs a Maven clean build,
+  and saves the cache for faster future builds.
 
 parameters:
   - name: repoUrl
     type: string
     displayName: Git Repository URL
-    description: URL of the Git repository containing the source code
+    description: URL of the Git repository
     required: true
 
   - name: branchName
     type: string
     displayName: Git Branch
-    description: Git branch to build from
+    description: Branch to build
     defaultValue: main
 
   - name: gitCredentials
     type: credentials
     displayName: Git Credentials
-    description: Credentials used to access the Git repository
+    description: Credentials to access the Git repository
     required: true
-
-  - name: imageName
-    type: string
-    displayName: Docker Image Name
-    description: Docker image name (image tag = build number)
-    defaultValue: gkamalakar1006/boardgames
-
-  - name: sonarProjectKey
-    type: string
-    displayName: SonarQube Project Key
-    description: SonarQube project key
-    defaultValue: board_game
