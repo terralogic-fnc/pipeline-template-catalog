@@ -1,0 +1,163 @@
+pipeline {
+  agent {
+    kubernetes {
+      cloud 'terralogic-eks-agent'
+      namespace 'cloudbees-builds'
+      inheritFrom 'jenkins-kaniko-agent'
+      defaultContainer 'jnlp'
+    }
+  }
+
+  environment {
+    /* ================= IMAGE ================= */
+    IMAGE_NAME = "${params.imageName}"
+    IMAGE_TAG  = "${BUILD_NUMBER}"
+
+    /* ================= MAVEN ================= */
+    MAVEN_REPO = 'maven-repo'
+    MVN_CACHE_NAME = 'mvn-cache'
+
+    /* ================= TRIVY ================= */
+    TRIVY_CACHE_DIR = '.trivycache'
+    TRIVY_CACHE_NAME = 'trivy-cache'
+    TRIVY_DB_REPOSITORY = 'docker.io/aquasec/trivy-db'
+    TRIVY_JAVA_DB_REPOSITORY = 'docker.io/aquasec/trivy-java-db'
+
+    /* ================= KANIKO ================= */
+    KANIKO_CACHE_DIR = '/workspace/.kaniko-cache'
+  }
+
+  stages {
+
+    /* ================= CHECKOUT ================= */
+    stage('Checkout') {
+      steps {
+        checkout([
+          $class: 'GitSCM',
+          branches: [[name: "*/${params.branchName}"]],
+          userRemoteConfigs: [[
+            url: params.repoUrl,
+            credentialsId: params.gitCredentials
+          ]]
+        ])
+      }
+    }
+
+    /* ================= MAVEN ================= */
+    stage('Restore Maven Cache') {
+      steps {
+        sh "mkdir -p ${MAVEN_REPO}"
+        readCache name: "${MVN_CACHE_NAME}"
+      }
+    }
+
+    stage('Maven Build') {
+      steps {
+        sh """
+          mvn clean install \
+            -Dmaven.repo.local=${MAVEN_REPO}
+        """
+      }
+    }
+
+    stage('Save Maven Cache') {
+      when { expression { env.CHANGE_ID == null } }
+      steps {
+        writeCache(
+          name: "${MVN_CACHE_NAME}",
+          includes: "${MAVEN_REPO}/**"
+        )
+      }
+    }
+
+    /* ================= SONAR ================= */
+    stage('SonarQube Scan') {
+      steps {
+        withSonarQubeEnv('sonar-server') {
+          sh """
+            mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+              -Dmaven.repo.local=${MAVEN_REPO} \
+              -Dsonar.projectKey=${params.sonarProjectKey} \
+              -Dsonar.projectName=${params.sonarProjectKey}
+          """
+        }
+      }
+    }
+
+    /* ================= TRIVY FS ================= */
+    stage('Restore Trivy Cache') {
+      steps {
+        sh "mkdir -p ${TRIVY_CACHE_DIR} trivy-templates trivy-reports"
+        readCache name: "${TRIVY_CACHE_NAME}"
+      }
+    }
+
+    stage('Prepare Trivy Template') {
+      steps {
+        sh '''
+          if [ ! -f trivy-templates/html.tpl ]; then
+            curl -fsSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl \
+              -o trivy-templates/html.tpl
+          fi
+        '''
+      }
+    }
+
+    stage('Trivy FS Scan (Non-Blocking)') {
+      steps {
+        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+          sh '''
+            trivy fs \
+              --cache-dir "$TRIVY_CACHE_DIR" \
+              --scanners vuln,license \
+              --severity LOW,MEDIUM,HIGH,CRITICAL \
+              --ignore-unfixed \
+              --format template \
+              --template @trivy-templates/html.tpl \
+              --output trivy-reports/fs-vuln.html .
+          '''
+        }
+      }
+    }
+
+    /* ================= KANIKO ================= */
+    stage('Kaniko Build & Push') {
+      steps {
+        container('kaniko') {
+          sh '''
+            mkdir -p "$KANIKO_CACHE_DIR"
+            /kaniko/executor \
+              --context /workspace \
+              --dockerfile Dockerfile \
+              --destination ${IMAGE_NAME}:${IMAGE_TAG} \
+              --destination ${IMAGE_NAME}:latest \
+              --cache=true \
+              --cache-dir="$KANIKO_CACHE_DIR"
+          '''
+        }
+      }
+    }
+
+    /* ================= SBOM ================= */
+    stage('Generate SBOM') {
+      steps {
+        sh '''
+          trivy fs \
+            --format cyclonedx \
+            --output trivy-reports/source-sbom.json .
+        '''
+      }
+    }
+  }
+
+  post {
+    always {
+      archiveArtifacts(
+        allowEmptyArchive: true,
+        artifacts: 'trivy-reports/*.html,trivy-reports/*.json'
+      )
+      deleteDir()
+    }
+  }
+}
+

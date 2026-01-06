@@ -1,0 +1,43 @@
+type: pipeline-template
+version: 1
+
+name: Java CI Pipeline with Security Scans
+displayName: Java CI – Build, Scan & Docker Image
+
+description: >
+  This pipeline automatically builds a Java application,
+  checks code quality, scans for security issues,
+  builds a Docker image, and publishes reports.
+  Users only need to provide the source code repository details.
+
+parameters:
+  - name: repoUrl
+    type: string
+    displayName: Git Repository URL
+    description: URL of the Git repository containing the source code
+    required: true
+
+  - name: branchName
+    type: string
+    displayName: Git Branch
+    description: Branch to build from
+    defaultValue: main
+
+  - name: gitCredentials
+    type: credentials
+    displayName: Git Credentials
+    description: Credentials used to access the Git repository
+    required: true
+
+  - name: imageName
+    type: string
+    displayName: Docker Image Name
+    description: Docker image name to build and push
+    defaultValue: gkamalakar1006/boardgames
+
+  - name: sonarProjectKey
+    type: string
+    displayName: SonarQube Project Key
+    description: Unique project key in SonarQube
+    defaultValue: board_game
+
