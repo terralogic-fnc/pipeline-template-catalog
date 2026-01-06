@@ -109,6 +109,20 @@ pipeline {
       }
     }
 
+    /* ================= SET SONAR PROJECT KEY (SAFE FALLBACK) ================= */
+    stage('Prepare Sonar Variables') {
+      steps {
+        script {
+          if (binding.hasVariable('sonarProjectKey') && sonarProjectKey?.trim()) {
+            env.SONAR_PROJECT_KEY = sonarProjectKey
+          } else {
+            env.SONAR_PROJECT_KEY = 'board_game'
+          }
+          echo "Using Sonar Project Key: ${env.SONAR_PROJECT_KEY}"
+        }
+      }
+    }
+
     /* ================= SONAR SCAN ================= */
     stage('SonarQube Scan') {
       steps {
@@ -117,8 +131,8 @@ pipeline {
             echo "=== SONARQUBE SCAN ==="
             mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
               -Dmaven.repo.local=${MAVEN_REPO} \
-              -Dsonar.projectKey=${sonarProjectKey} \
-              -Dsonar.projectName=${sonarProjectKey}
+              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+              -Dsonar.projectName=${SONAR_PROJECT_KEY}
           """
         }
       }
