@@ -1,7 +1,7 @@
 type: pipeline-template-catalog
 version: 1
 
-name: devops-ci-catalog
+name: terralogic-devops-ci-catalog
 displayName: DevOps CI Pipeline Catalog
 
 description: >
