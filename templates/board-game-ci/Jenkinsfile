@@ -8,45 +8,55 @@ pipeline {
     }
   }
 
+  options {
+    disableConcurrentBuilds()
+    durabilityHint('PERFORMANCE_OPTIMIZED')
+  }
+
+  environment {
+    MAVEN_REPO     = 'maven-repo'
+    MVN_CACHE_NAME = 'mvn-cache'
+  }
+
   stages {
 
-    /* ================= MAVEN BUILD ================= */
+    stage('Checkout') {
+      steps {
+        git branch: 'main',
+            credentialsId: 'github-pat',
+            url: 'https://github.com/kamalakar22/board_game.git'
+      }
+    }
+
+    stage('Restore Maven Cache (S3)') {
+      steps {
+        sh 'mkdir -p "$MAVEN_REPO"'
+        readCache name: "${MVN_CACHE_NAME}"
+      }
+    }
+
     stage('Maven Build') {
       steps {
-        sh """
-          mvn clean install 
-        """
+        sh '''
+          mvn clean install \
+            -Dmaven.repo.local="$MAVEN_REPO"
+        '''
       }
     }
 
-    /* ================= SONARQUBE SCAN ================= */
-    stage('SonarQube Scan') {
+    stage('Save Maven Cache (S3)') {
       steps {
-        withSonarQubeEnv('sonar-server') {
-          sh """
-            mvn \
-              -Dmaven.repo.local=${MAVEN_REPO} \
-              org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-              -Dsonar.projectKey=${sonarProjectKey} \
-              -Dsonar.projectName=${sonarProjectKey}
-          """
-        }
+        writeCache(
+          name: "${MVN_CACHE_NAME}",
+          includes: "${MAVEN_REPO}/**"
+        )
       }
     }
+  }
 
-    /* ================= KANIKO BUILD & PUSH ================= */
-    stage('Kaniko Build & Push') {
-      steps {
-        container('kaniko') {
-          sh '''
-            /kaniko/executor \
-              --context /workspace \
-              --dockerfile Dockerfile \
-              --destination ${IMAGE_NAME}:${IMAGE_TAG} \
-              --destination ${IMAGE_NAME}:latest
-          '''
-        }
-      }
+  post {
+    always {
+      deleteDir()   // required for k8s ephemeral pods
     }
   }
 }
