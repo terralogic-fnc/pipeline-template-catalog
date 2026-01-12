@@ -14,9 +14,7 @@ pipeline {
     stage('Maven Build') {
       steps {
         sh """
-          mvn clean install \
-            -Dmaven.repo.local \
-            -DskipTests
+          mvn clean install 
         """
       }
     }
