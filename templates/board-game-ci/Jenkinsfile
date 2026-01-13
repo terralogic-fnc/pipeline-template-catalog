@@ -14,8 +14,8 @@ pipeline {
   }
 
   environment {
-    MAVEN_REPO     = 'maven-repo'
-    MVN_CACHE_NAME = 'mvn-cache'
+    NPM_CACHE_DIR  = 'node_modules'
+    NPM_CACHE_NAME = 'npm-cache'
   }
 
   stages {
@@ -28,27 +28,26 @@ pipeline {
       }
     }
 
-    stage('Restore Maven Cache (S3)') {
+    stage('Restore NPM Cache') {
       steps {
-        sh 'mkdir -p "$MAVEN_REPO"'
-        readCache name: "${MVN_CACHE_NAME}"
+        sh 'mkdir -p "$NPM_CACHE_DIR"'
+        readCache name: "${NPM_CACHE_NAME}"
       }
     }
 
-    stage('Maven Build') {
+    stage('Install Dependencies') {
       steps {
         sh '''
-          mvn clean install \
-            -Dmaven.repo.local="$MAVEN_REPO"
+          npm install
         '''
       }
     }
 
-    stage('Save Maven Cache (S3)') {
+    stage('Save NPM Cache') {
       steps {
         writeCache(
-          name: "${MVN_CACHE_NAME}",
-          includes: "${MAVEN_REPO}/**"
+          name: "${NPM_CACHE_NAME}",
+          includes: "${NPM_CACHE_DIR}/**"
         )
       }
     }
