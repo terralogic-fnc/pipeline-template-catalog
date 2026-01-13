@@ -24,7 +24,7 @@ pipeline {
       steps {
         git branch: 'main',
             credentialsId: 'github-pat',
-            url: 'https://github.com/kamalakar22/board_game.git'
+            url: 'https://github.com/terralogic-fnc/youtube-clone.git'
       }
     }
 
